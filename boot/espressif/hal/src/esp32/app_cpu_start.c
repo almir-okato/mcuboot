@@ -32,7 +32,7 @@ void appcpu_start(uint32_t entry_addr)
     DPORT_CLEAR_PERI_REG_MASK(DPORT_APPCPU_CTRL_A_REG, DPORT_APPCPU_RESETTING);
 
     ets_set_appcpu_boot_addr(entry_addr);
-    ets_delay_us(10000);
+    ets_delay_us(100000);
     uart_tx_wait_idle(0);
     ESP_LOGI(TAG, "APPCPU start sequence complete");
 }

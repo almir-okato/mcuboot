@@ -44,6 +44,9 @@ void do_boot(struct boot_rsp *rsp)
     unsigned int entry_addr;
     BOOT_LOG_INF("br_image_off = 0x%x", rsp->br_image_off);
     BOOT_LOG_INF("ih_hdr_size = 0x%x", rsp->br_hdr->ih_hdr_size);
+
+    // BOOT_LOG_INF("boot_cpu_index = 0x%x", rsp->boot_cpu_index);
+
     int slot = (rsp->br_image_off == CONFIG_ESP_IMAGE0_PRIMARY_START_ADDRESS) ? PRIMARY_SLOT : SECONDARY_SLOT;
     esp_app_image_load(IMAGE_INDEX_0, slot, rsp->br_hdr->ih_hdr_size, &entry_addr);
     ((void (*)(void))entry_addr)(); /* Call to application entry address should not return */
@@ -77,16 +80,28 @@ done:
     return rc;
 }
 
-void do_boot_appcpu(uint32_t img_index, uint32_t slot)
+// void do_boot_appcpu(uint32_t img_index, uint32_t slot)
+// {
+//     unsigned int entry_addr;
+//     struct image_header img_header;
+
+//     if (read_image_header(img_index, slot, &img_header) != 0) {
+//         FIH_PANIC;
+//     }
+
+//     esp_app_image_load(img_index, slot, img_header.ih_hdr_size, &entry_addr);
+//     appcpu_start(entry_addr);
+// }
+
+void do_boot_appcpu(struct boot_rsp *rsp)
 {
     unsigned int entry_addr;
-    struct image_header img_header;
+    BOOT_LOG_INF("br_image_off = 0x%x", rsp->br_image_off);
+    BOOT_LOG_INF("ih_hdr_size = 0x%x", rsp->br_hdr->ih_hdr_size);
 
-    if (read_image_header(img_index, slot, &img_header) != 0) {
-        FIH_PANIC;
-    }
+    BOOT_LOG_INF("boot_cpu_index = 0x%x", rsp->boot_cpu_index);
 
-    esp_app_image_load(img_index, slot, img_header.ih_hdr_size, &entry_addr);
+    esp_app_image_load(rsp->img_index, PRIMARY_SLOT, rsp->br_hdr->ih_hdr_size, &entry_addr);
     appcpu_start(entry_addr);
 }
 #endif
@@ -224,7 +239,9 @@ int main()
     /* Multi image independent boot
      * Boot on the second processor happens before the image0 boot
      */
-    do_boot_appcpu(IMAGE_INDEX_1, PRIMARY_SLOT);
+    struct boot_rsp rsp_app_cpu;
+    boot_rsp_by_image_id(&rsp_app_cpu, IMAGE_INDEX_1);
+    do_boot_appcpu(&rsp_app_cpu);
 #endif
 
     do_boot(&rsp);
