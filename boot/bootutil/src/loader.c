@@ -1364,7 +1364,7 @@ int boot_scramble_region_backwards(const struct flash_area *fa, uint32_t off, ui
     } else {
         uint8_t buf[BOOT_MAX_ALIGN];
         const size_t write_block = flash_area_align(fa);
-        uint32_t first_offset = ALIGN_DOWN(off, write_block);
+        first_offset = ALIGN_DOWN(off, write_block);
 
         memset(buf, flash_area_erased_val(fa), sizeof(buf));
 
