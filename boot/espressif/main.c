@@ -96,6 +96,370 @@ void do_boot_appcpu(uint32_t img_index, uint32_t slot)
 }
 #endif
 
+#include "bootutil/bootutil_public.h"
+#include "bootutil_priv.h"
+#include "bootutil_misc.h"
+
+const union boot_img_magic_t testmagic1 = {
+    .val = {
+        0x77, 0xc2, 0x95, 0xf3,
+        0x60, 0xd2, 0xef, 0x7f,
+        0x35, 0x52, 0x50, 0x0f,
+        0x2c, 0xb6, 0x79, 0x80
+    }
+};
+const union boot_img_magic_t testmagic2 = {
+    .val = {
+        0x20, 0x00, 0x2d, 0xe1,
+        0x5d, 0x29, 0x41, 0x0b,
+        0x8d, 0x77, 0x67, 0x9c,
+        0x11, 0x0f, 0x1f, 0x8a
+    }
+};
+
+#define TESTMAGIC1 testmagic1.val
+#define TESTMAGIC2 testmagic2.val
+
+int
+write_test(struct flash_area *fap)
+{
+    int rc;
+    uint8_t magic[BOOT_MAGIC_ALIGN_SIZE];
+    uint8_t erased_val;
+
+    uint32_t swap_size_off = boot_swap_info_off(fap) - BOOT_MAX_ALIGN;
+    uint32_t test_off = swap_size_off - 0x200;
+
+    uint32_t off = test_off;
+    erased_val = flash_area_erased_val(fap);
+
+    BOOT_LOG_INF("----------WRITING----------");
+    BOOT_LOG_INF("WRITING random data: fa_id=%d off=0x%lx (0x%lx)",
+                flash_area_get_id(fap), (unsigned long)off,
+                (unsigned long)(flash_area_get_off(fap) + off));
+
+    while (off < swap_size_off) {
+        uint8_t index_random = off % BOOT_MAGIC_ALIGN_SIZE*2 == 0 ? 0 : BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ;
+        uint8_t index_erased = off % BOOT_MAGIC_ALIGN_SIZE*2 == 0 ? BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ : 0;
+        bootloader_fill_random(&magic[index_random], BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ);
+        memset(&magic[index_erased], erased_val, BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ);
+
+        for (uint8_t i=0; i<BOOT_MAGIC_ALIGN_SIZE; i=i+4) {
+            if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+                BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off));
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                magic[i], magic[i+1], magic[i+2], magic[i+3]);
+        }
+
+        rc = flash_area_erase(fap, off, BOOT_MAGIC_ALIGN_SIZE);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        rc = flash_area_write(fap, off, &magic[0], BOOT_MAGIC_ALIGN_SIZE);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        off += BOOT_MAGIC_ALIGN_SIZE;
+    }
+    BOOT_LOG_INF("----------WRITING----------");
+
+    return 0;
+}
+
+int
+read_test(struct flash_area *fap)
+{
+    int rc;
+    uint8_t read_buf[BOOT_MAGIC_ALIGN_SIZE * 4];
+    uint32_t swap_size_off = boot_swap_info_off(fap) - BOOT_MAX_ALIGN;
+    uint32_t test_off = swap_size_off - 0x200;
+    uint32_t off = test_off;
+
+    BOOT_LOG_INF("----------READING----------");
+    BOOT_LOG_INF("READING data written before: fa_id=%d off=0x%lx (0x%lx)",
+            flash_area_get_id(fap), (unsigned long)off,
+            (unsigned long)(flash_area_get_off(fap) + off));
+
+    while (off < swap_size_off) {
+        rc = flash_area_read(fap,off, read_buf, BOOT_MAGIC_ALIGN_SIZE * 4);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        for (uint8_t i=0; i<BOOT_MAGIC_ALIGN_SIZE * 4; i=i+4) {
+            if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+                BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+        }
+        off += BOOT_MAGIC_ALIGN_SIZE * 4;
+    }
+    BOOT_LOG_INF("----------READING----------");
+    return 0;
+}
+
+int
+write_noerase_test(struct flash_area *fap)
+{
+    int rc;
+    uint8_t magic[BOOT_MAGIC_ALIGN_SIZE];
+    uint8_t erased_val;
+
+    uint32_t swap_size_off = boot_swap_info_off(fap) - BOOT_MAX_ALIGN;
+
+    uint32_t off = swap_size_off;
+
+    BOOT_LOG_INF("----------WRITING-WITHOUT-ERASE----------");
+    BOOT_LOG_INF("WRITING-WITHOUT-ERASE random data + TESTMAGIC1, TESTMAGIC2 + erased_val : fa_id=%d off=0x%lx (0x%lx)",
+                flash_area_get_id(fap), (unsigned long)off,
+                (unsigned long)(flash_area_get_off(fap) + off));
+
+    bootloader_fill_random(&magic[0], BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ);
+    memcpy(&magic[BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ], TESTMAGIC1, BOOT_MAGIC_SZ);
+
+    for (uint8_t i=0; i<BOOT_MAGIC_ALIGN_SIZE; i=i+4) {
+        if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+            BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off));
+        }
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            magic[i], magic[i+1], magic[i+2], magic[i+3]);
+    }
+
+    rc = flash_area_write(fap, off, &magic[0], BOOT_MAGIC_ALIGN_SIZE);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += BOOT_MAGIC_ALIGN_SIZE;
+
+    erased_val = flash_area_erased_val(fap);
+
+    memset(&magic[BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ], erased_val, BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ);
+    memcpy(&magic[0], TESTMAGIC2, BOOT_MAGIC_SZ);
+
+    for (uint8_t i=0; i<BOOT_MAGIC_ALIGN_SIZE; i=i+4) {
+        if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+            BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off));
+        }
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            magic[i], magic[i+1], magic[i+2], magic[i+3]);
+    }
+
+    rc = flash_area_write(fap, off, &magic[0], BOOT_MAGIC_ALIGN_SIZE);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+
+    BOOT_LOG_INF("----------WRITING-WITHOUT-ERASE----------");
+
+    return 0;
+}
+
+int
+read_noerase_test(struct flash_area *fap)
+{
+    int rc;
+    uint8_t read_buf[BOOT_MAGIC_ALIGN_SIZE];
+    uint32_t swap_size_off = boot_swap_info_off(fap) - BOOT_MAX_ALIGN;
+    uint32_t off = swap_size_off;
+
+    BOOT_LOG_INF("----------READING-WITHOUT-ERASE----------");
+    BOOT_LOG_INF("READING-WITHOUT-ERASE data written: fa_id=%d off=0x%lx (0x%lx)",
+            flash_area_get_id(fap), (unsigned long)off,
+            (unsigned long)(flash_area_get_off(fap) + off));
+
+    while (off < (swap_size_off + (BOOT_MAGIC_ALIGN_SIZE * 2))) {
+        rc = flash_area_read(fap,off, read_buf, BOOT_MAGIC_ALIGN_SIZE);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        for (uint8_t i=0; i<BOOT_MAGIC_ALIGN_SIZE; i=i+4) {
+            if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+                BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+        }
+        off = off + BOOT_MAGIC_ALIGN_SIZE;
+    }
+
+    BOOT_LOG_INF("----------READING-WITHOUT-ERASE----------");
+
+    return 0;
+}
+
+#define UNALIGN_OFF 16
+int
+write_unaligned_test(struct flash_area *fap)
+{
+    int rc;
+    uint8_t magic[BOOT_MAGIC_ALIGN_SIZE];
+    uint8_t read_buf[BOOT_MAGIC_ALIGN_SIZE];
+
+    uint32_t swap_size_off = boot_swap_info_off(fap) - BOOT_MAX_ALIGN;
+
+    uint32_t off = swap_size_off + (BOOT_MAGIC_ALIGN_SIZE * 2);
+    uint32_t off_unaligned = off + UNALIGN_OFF;
+
+    BOOT_LOG_INF("----------WRITING-UNALIGNED----------");
+    BOOT_LOG_INF("WRITING-UNALIGNED: fa_id=%d off=0x%lx (0x%lx) - whats EXPECTED:",
+                flash_area_get_id(fap), (unsigned long)off,
+                (unsigned long)(flash_area_get_off(fap) + off));
+
+    rc = flash_area_read(fap,off, read_buf, BOOT_MAGIC_ALIGN_SIZE);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+
+    memcpy(&read_buf[UNALIGN_OFF], TESTMAGIC1, BOOT_MAGIC_SZ);
+
+    for (uint8_t i=0; i<BOOT_MAGIC_ALIGN_SIZE; i=i+4) {
+        if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+            BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off));
+        }
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+    }
+
+    memcpy(&magic[0], TESTMAGIC1, BOOT_MAGIC_SZ);
+
+    // rc = flash_area_erase(fap, off_unaligned, BOOT_MAGIC_SZ);
+    // if (rc != 0) {
+    //     return BOOT_EFLASH;
+    // }
+    rc = flash_area_erase(fap, off, BOOT_MAGIC_ALIGN_SIZE);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+
+    rc = flash_area_write(fap, off_unaligned, &magic[0], BOOT_MAGIC_SZ);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+
+    BOOT_LOG_INF("----------WRITING-UNALIGNED----------");
+
+    return 0;
+}
+
+int
+read_unaligned_test(struct flash_area *fap)
+{
+    int rc;
+    uint8_t read_buf[BOOT_MAGIC_ALIGN_SIZE];
+    uint32_t swap_size_off = boot_swap_info_off(fap) - BOOT_MAX_ALIGN;
+    uint32_t off = swap_size_off + (BOOT_MAGIC_ALIGN_SIZE * 2);
+
+    BOOT_LOG_INF("----------READING-UNALIGNED----------");
+    BOOT_LOG_INF("READING-UNALIGNED data written: fa_id=%d off=0x%lx (0x%lx)",
+            flash_area_get_id(fap), (unsigned long)off,
+            (unsigned long)(flash_area_get_off(fap) + off));
+
+    while (off < swap_size_off + (BOOT_MAGIC_ALIGN_SIZE * 2) + BOOT_MAGIC_ALIGN_SIZE) {
+        rc = flash_area_read(fap,off, read_buf, BOOT_MAGIC_ALIGN_SIZE);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        for (uint8_t i=0; i<BOOT_MAGIC_ALIGN_SIZE; i=i+4) {
+            if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+                BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+        }
+        off += BOOT_MAGIC_ALIGN_SIZE;
+    }
+
+    BOOT_LOG_INF("----------READING-UNALIGNED----------");
+
+    return 0;
+}
+
+int
+write_read_trailer_test() {
+    int rc;
+    int fa_id;
+    uint8_t read_buf[BOOT_MAX_ALIGN * 5];
+    const struct flash_area *fap;
+
+    BOOT_LOG_INF("----------WRITE-READ-TRAILER----------");
+
+    for (uint8_t slot = 0; slot < BOOT_NUM_SLOTS; slot++) {
+        fa_id = flash_area_id_from_multi_image_slot(0, slot);
+        rc = flash_area_open(fa_id, &fap);
+
+        rc = boot_write_swap_info(fap, 0xA, 0x5);
+        assert(rc == 0);
+
+        rc = boot_write_image_ok(fap);
+        assert(rc == 0);
+
+        rc = boot_write_swap_size(fap, 0xA6152268);
+        assert(rc == 0);
+
+        rc = boot_write_magic(fap);
+        assert(rc == 0);
+
+        rc = boot_write_copy_done(fap);
+        assert(rc == 0);
+    }
+    fa_id = FLASH_AREA_IMAGE_SCRATCH;
+    rc = flash_area_open(fa_id, &fap);
+    rc = boot_write_swap_info(fap, 0xA, 0x5);
+    assert(rc == 0);
+    rc = boot_write_image_ok(fap);
+    assert(rc == 0);
+    rc = boot_write_swap_size(fap, 0xA6152268);
+    assert(rc == 0);
+    rc = boot_write_magic(fap);
+    assert(rc == 0);
+    rc = boot_write_copy_done(fap);
+    assert(rc == 0);
+
+    uint32_t swap_status_off;
+    uint32_t swap_info_off;
+    for (uint8_t slot = 0; slot < BOOT_NUM_SLOTS; slot++) {
+        fa_id = flash_area_id_from_multi_image_slot(0, slot);
+        rc = flash_area_open(fa_id, &fap);
+        swap_status_off = boot_status_off(fap);
+        swap_info_off = boot_swap_info_off(fap) - BOOT_MAX_ALIGN;
+
+        BOOT_LOG_INF("DEBUG fa_id=%d (0x%lx) swap_status_off=0x%lx trailer size=%d (0x%x)",
+            fa_id, fap->fa_off, fap->fa_off+swap_status_off,
+            fap->fa_size - swap_status_off, fap->fa_size - swap_status_off);
+
+        rc = flash_area_read(fap,swap_info_off, read_buf, BOOT_MAX_ALIGN * 5);
+        BOOT_LOG_INF("DEBUG swap_size_off=0x%lx whats read  rc=0x%x", fap->fa_off+swap_info_off, rc);
+        for (uint8_t i=0; i<BOOT_MAX_ALIGN * 5; i=i+4) {
+            if (i % BOOT_MAX_ALIGN == 0) {
+                BOOT_LOG_INF(" ");
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+        }
+    }
+    fa_id = FLASH_AREA_IMAGE_SCRATCH;
+    rc = flash_area_open(fa_id, &fap);
+    swap_status_off = boot_status_off(fap);
+    swap_info_off = boot_swap_info_off(fap) - BOOT_MAX_ALIGN;
+    BOOT_LOG_INF("DEBUG fa_id=%d (0x%lx) SCRATCH swap_status_off=0x%lx trailer size=%d (0x%x)",
+        fa_id, fap->fa_off, fap->fa_off+swap_status_off,
+        fap->fa_size - swap_status_off, fap->fa_size - swap_status_off);
+
+    rc = flash_area_read(fap,swap_info_off, read_buf, BOOT_MAX_ALIGN * 5);
+    BOOT_LOG_INF("DEBUG swap_size_off=0x%lx whats read  rc=0x%x", fap->fa_off+swap_info_off, rc);
+    for (uint8_t i=0; i<BOOT_MAX_ALIGN * 5; i=i+4) {
+        if (i % BOOT_MAX_ALIGN == 0) {
+            BOOT_LOG_INF(" ");
+        }
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+    }
+
+    BOOT_LOG_INF("----------WRITE-READ-TRAILER----------");
+    return rc;
+}
+
 int main()
 {
     if (bootloader_init() != ESP_OK) {
@@ -169,6 +533,48 @@ int main()
         boot_serial_start(&boot_funcs);
     }
 #endif
+
+
+    uint32_t swap_status_off;
+    uint32_t swap_info_off;
+    const struct flash_area *fap;
+    int fa_id;
+    int rc;
+    for (uint8_t slot = 0; slot < BOOT_NUM_SLOTS; slot++) {
+        fa_id = flash_area_id_from_multi_image_slot(0, slot);
+        rc = flash_area_open(fa_id, &fap);
+
+        BOOT_LOG_INF("\nTESTS DEBUG fa_id=%d (0x%lx)", fa_id, fap->fa_off);
+
+        rc = write_test(fap);
+        if (rc != 0) {
+            BOOT_LOG_INF("ERROR!");
+        }
+        rc = read_test(fap);
+        if (rc != 0) {
+            BOOT_LOG_INF("ERROR!");
+        }
+        rc = write_noerase_test(fap);
+        if (rc != 0) {
+            BOOT_LOG_INF("ERROR!");
+        }
+        rc = read_noerase_test(fap);
+        if (rc != 0) {
+            BOOT_LOG_INF("ERROR!");
+        }
+        rc = write_unaligned_test(fap);
+        if (rc != 0) {
+            BOOT_LOG_INF("ERROR!");
+        }
+        rc = read_unaligned_test(fap);
+        if (rc != 0) {
+            BOOT_LOG_INF("ERROR!");
+        }
+
+    }
+    write_read_trailer_test();
+    while(1);
+
 
     /* Step 2 (see above for full description):
      *   2) MCUboot validates the application images and prepares the booting process.
