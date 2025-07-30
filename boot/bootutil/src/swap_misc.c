@@ -46,7 +46,7 @@ swap_erase_trailer_sectors(const struct boot_loader_state *state,
         uint32_t trailer_sz;
         uint32_t total_sz;
 
-        BOOT_LOG_DBG("Erasing trailer; fa_id=%d", flash_area_get_id(fap));
+        BOOT_LOG_INF("Erasing trailer; fa_id=%d", flash_area_get_id(fap));
 
         /* By default it is assumed that slot is primary */
         if (fap == BOOT_IMG_AREA(state, BOOT_SECONDARY_SLOT)) {
@@ -68,7 +68,7 @@ swap_erase_trailer_sectors(const struct boot_loader_state *state,
             total_sz += sz;
         } while (total_sz < trailer_sz);
     } else {
-        BOOT_LOG_DBG("Erasing trailer not required; fa_id=%d", flash_area_get_id(fap));
+        BOOT_LOG_INF("Erasing trailer not required; fa_id=%d", flash_area_get_id(fap));
     }
     return rc;
 }
@@ -80,7 +80,7 @@ swap_scramble_trailer_sectors(const struct boot_loader_state *state,
     size_t off;
     int rc;
 
-    BOOT_LOG_DBG("swap_scramble_trailer_sectors: fa_id=%d", flash_area_get_id(fap));
+    BOOT_LOG_INF("swap_scramble_trailer_sectors: fa_id=%d fa_off=0x%x", flash_area_get_id(fap), fap->fa_off);
 
     /* Delete starting from last sector and moving to beginning */
     rc = boot_trailer_scramble_offset(fap, BOOT_WRITE_SZ(state), &off);
@@ -117,7 +117,7 @@ swap_status_init(const struct boot_loader_state *state,
 
     image_index = BOOT_CURR_IMG(state);
 
-    BOOT_LOG_DBG("initializing status; fa_id=%d", flash_area_get_id(fap));
+    BOOT_LOG_INF("initializing status; fa_id=%d", flash_area_get_id(fap));
 
     rc = boot_read_swap_state(state->imgs[image_index][BOOT_SECONDARY_SLOT].area,
                               &swap_state);
@@ -125,6 +125,14 @@ swap_status_init(const struct boot_loader_state *state,
 
     if (bs->swap_type != BOOT_SWAP_TYPE_NONE) {
         rc = boot_write_swap_info(fap, bs->swap_type, image_index);
+
+        uint32_t off = boot_swap_info_off(fap);
+        uint8_t swap_info;
+        rc = flash_area_read(fap, off, &swap_info, sizeof swap_info);
+        BOOT_LOG_INF("reading swap_info; fa_id=%d off=0x%lx (0x%lx), swap_info=0x%x",
+            flash_area_get_id(fap), (unsigned long)off,
+            (unsigned long)(flash_area_get_off(fap) + off),
+            swap_info);
         assert(rc == 0);
     }
 
@@ -190,8 +198,20 @@ swap_read_status(struct boot_loader_state *state, struct boot_status *bs)
         }
 
         if (bootutil_buffer_is_erased(fap, &swap_info, sizeof swap_info)) {
+            BOOT_LOG_INF("buffer_is_erased swap_read_status fa_id=%d off=0x%lx (0x%lx) swap_info=UNSET->NONE ERASED", fap->fa_id, off, fap->fa_off+off);
             BOOT_SET_SWAP_INFO(swap_info, 0, BOOT_SWAP_TYPE_NONE);
             rc = 0;
+        } else {
+            BOOT_LOG_INF("buffer_is_erased swap_read_status fa_id=%d off=0x%lx (0x%lx) swap_info=0x%x NOT ERASED \
+                \nswap_type=%s image_num=%d",
+                fap->fa_id, off, fap->fa_off+off, swap_info,
+                BOOT_GET_SWAP_TYPE(swap_info) == BOOT_SWAP_TYPE_NONE ? "none" :
+                BOOT_GET_SWAP_TYPE(swap_info) == BOOT_SWAP_TYPE_TEST ? "test" :
+                BOOT_GET_SWAP_TYPE(swap_info) == BOOT_SWAP_TYPE_PERM ? "perm" :
+                BOOT_GET_SWAP_TYPE(swap_info) == BOOT_SWAP_TYPE_REVERT ? "revert" :
+                BOOT_GET_SWAP_TYPE(swap_info) == BOOT_SWAP_TYPE_FAIL ? "fail" :
+                "ERROR->none",
+                BOOT_GET_IMAGE_NUM(swap_info));
         }
 
         /* Extract the swap type info */

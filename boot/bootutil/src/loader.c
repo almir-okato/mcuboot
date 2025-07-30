@@ -2469,6 +2469,43 @@ out:
     memset(&bs, 0, sizeof(struct boot_status));
 #endif
 
+    int fa_id;
+    uint8_t read_buf[BOOT_MAX_ALIGN * 4];
+    const struct flash_area *fap;
+    uint32_t swap_status_off;
+    uint32_t swap_info_off;
+    for (uint8_t slot = 0; slot < BOOT_NUM_SLOTS; slot++) {
+        fa_id = flash_area_id_from_multi_image_slot(0, slot);
+        rc = flash_area_open(fa_id, &fap);
+        swap_status_off = boot_status_off(fap);
+        swap_info_off = boot_swap_info_off(fap);
+
+        BOOT_LOG_INF("DEBUG fa_id=%d (0x%lx) swap_status_off=0x%lx trailer size=%d (0x%x)",
+            fa_id, fap->fa_off, fap->fa_off+swap_status_off,
+            fap->fa_size - swap_status_off, fap->fa_size - swap_status_off);
+
+        rc = flash_area_read(fap,swap_info_off, read_buf, BOOT_MAX_ALIGN * 4);
+        BOOT_LOG_INF("DEBUG swap_info_off=0x%lx whats read  rc=0x%x", fap->fa_off+swap_info_off, rc);
+        for (uint8_t i=0; i<BOOT_MAX_ALIGN * 4; i=i+4) {
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+        }
+    }
+    fa_id = FLASH_AREA_IMAGE_SCRATCH;
+    rc = flash_area_open(fa_id, &fap);
+    swap_status_off = boot_status_off(fap);
+    swap_info_off = boot_swap_info_off(fap);
+    BOOT_LOG_INF("DEBUG fa_id=%d (0x%lx) SCRATCH swap_status_off=0x%lx trailer size=%d (0x%x)",
+        fa_id, fap->fa_off, fap->fa_off+swap_status_off,
+        fap->fa_size - swap_status_off, fap->fa_size - swap_status_off);
+
+    rc = flash_area_read(fap,swap_info_off, read_buf, BOOT_MAX_ALIGN * 4);
+    BOOT_LOG_INF("DEBUG swap_info_off=0x%lx whats read  rc=0x%x", fap->fa_off+swap_info_off, rc);
+    for (uint8_t i=0; i<BOOT_MAX_ALIGN * 4; i=i+4) {
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+    }
+
     boot_close_all_flash_areas(state);
     FIH_RET(fih_rc);
 }

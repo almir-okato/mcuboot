@@ -399,7 +399,7 @@ boot_write_swap_size(const struct flash_area *fap, uint32_t swap_size)
     uint32_t off;
 
     off = boot_swap_size_off(fap);
-    BOOT_LOG_DBG("writing swap_size; fa_id=%d off=0x%lx (0x%lx)",
+    BOOT_LOG_INF("writing swap_size; fa_id=%d off=0x%lx (0x%lx)",
                  flash_area_get_id(fap), (unsigned long)off,
                  (unsigned long)flash_area_get_off(fap) + off);
     return boot_write_trailer(fap, off, (const uint8_t *) &swap_size, 4);

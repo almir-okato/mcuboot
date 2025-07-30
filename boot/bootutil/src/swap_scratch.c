@@ -213,6 +213,13 @@ swap_read_status_bytes(const struct flash_area *fap,
         }
 
         if (bootutil_buffer_is_erased(fap, &status, 1)) {
+            BOOT_LOG_INF("buffer_is_erased swap_read_status_bytes fa_id=%d off=0x%lx (0x%lx) status=UNSET ERASED", fap->fa_id, off+i, fap->fa_off+off+i);
+
+        } else {
+            BOOT_LOG_INF("buffer_is_erased swap_read_status_bytes fa_id=%d off=0x%lx (0x%lx) status=0x%x NOT ERASED", fap->fa_id, off+i, fap->fa_off+off+i, status);
+        }
+
+        if (bootutil_buffer_is_erased(fap, &status, 1)) {
             if (found && !found_idx) {
                 found_idx = i;
             }
@@ -745,8 +752,11 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
 
     bs->use_scratch = (bs->idx == BOOT_STATUS_IDX_0 && copy_sz != sz);
 
+    BOOT_LOG_INF("boot_swap_sectors - state:%d idx:%d copy_sz:0x%x img_off:0x%08x use_scratch:%d",
+                bs->state-1, bs->idx, copy_sz, img_off, bs->use_scratch);
+
     if (bs->state == BOOT_STATUS_STATE_0) {
-        BOOT_LOG_DBG("erasing scratch area");
+        BOOT_LOG_INF("erasing scratch area");
         rc = boot_erase_region(fap_scratch, 0, flash_area_get_size(fap_scratch), false);
         assert(rc == 0);
 
@@ -773,6 +783,8 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
                 rc = boot_erase_region(fap_scratch, 0,
                         flash_area_get_size(fap_scratch), false);
                 assert(rc == 0);
+
+                BOOT_LOG_INF("erasing scratch area !bs->use_scratch BOOT_STATUS_STATE_0");
             }
         }
 
@@ -784,6 +796,9 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
         bs->state = BOOT_STATUS_STATE_1;
         BOOT_STATUS_ASSERT(rc == 0);
     }
+
+    BOOT_LOG_INF("boot_swap_sectors - state:%d idx:%d copy_sz:0x%x img_off:0x%08x use_scratch:%d",
+                bs->state-1, bs->idx, copy_sz, img_off, bs->use_scratch);
 
     if (bs->state == BOOT_STATUS_STATE_1) {
         uint32_t erase_sz = sz;
@@ -825,6 +840,9 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
         bs->state = BOOT_STATUS_STATE_2;
         BOOT_STATUS_ASSERT(rc == 0);
     }
+
+    BOOT_LOG_INF("boot_swap_sectors - state:%d idx:%d copy_sz:0x%x img_off:0x%08x use_scratch:%d",
+            bs->state-1, bs->idx, copy_sz, img_off, bs->use_scratch);
 
     if (bs->state == BOOT_STATUS_STATE_2) {
         uint32_t erase_sz = sz;
@@ -877,6 +895,14 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
             if (swap_state.swap_type != BOOT_SWAP_TYPE_NONE) {
                 rc = boot_write_swap_info(fap_primary_slot,
                         swap_state.swap_type, image_index);
+
+                uint32_t off = boot_swap_info_off(fap_primary_slot);
+                uint8_t swap_info;
+                rc = flash_area_read(fap_primary_slot, off, &swap_info, sizeof swap_info);
+                BOOT_LOG_INF("reading swap_info; fa_id=%d off=0x%lx (0x%lx), swap_info=0x%x",
+                    flash_area_get_id(fap_primary_slot), (unsigned long)off,
+                    (unsigned long)(flash_area_get_off(fap_primary_slot) + off),
+                    swap_info);
                 assert(rc == 0);
             }
 
@@ -913,10 +939,13 @@ boot_swap_sectors(int idx, uint32_t sz, struct boot_loader_state *state,
             * happens then the scratch which is partially erased would be wrote back to the
             * primary slot, causing a corrupt unbootable image
             */
+            BOOT_LOG_INF("erasing scratch area erase_scratch BOOT_STATUS_STATE_2");
             rc = boot_erase_region(fap_scratch, 0, flash_area_get_size(fap_scratch), true);
             assert(rc == 0);
         }
     }
+    BOOT_LOG_INF("boot_swap_sectors NEXT - state:%d idx:%d copy_sz:0x%x img_off:0x%08x use_scratch:%d",
+                bs->state-1, bs->idx, copy_sz, img_off, bs->use_scratch);
 }
 
 void
