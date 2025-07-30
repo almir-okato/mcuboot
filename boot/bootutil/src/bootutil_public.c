@@ -204,13 +204,19 @@ bool bootutil_buffer_is_erased(const struct flash_area *area,
         return false;
     }
 
+    // BOOT_LOG_INF("bootutil_buffer_is_erased: fa_id=%d off=0x%lx",
+    //              flash_area_get_id(area), (unsigned long)(flash_area_get_off(area)));
+
     erased_val = flash_area_erased_val(area);
     for (i = 0, u8b = (uint8_t *)buffer; i < len; i++) {
         if (u8b[i] != erased_val) {
+            // BOOT_LOG_INF("bootutil_buffer_is_erased: fa_id=%d off=0x%lx NOT_ERASED",
+            //         flash_area_get_id(area), (unsigned long)(flash_area_get_off(area)));
             return false;
         }
     }
-
+    // BOOT_LOG_INF("bootutil_buffer_is_erased: fa_id=%d off=0x%lx ERASED",
+    //              flash_area_get_id(area), (unsigned long)(flash_area_get_off(area)));
     return true;
 }
 
@@ -224,8 +230,10 @@ boot_read_flag(const struct flash_area *fap, uint8_t *flag, uint32_t off)
         return BOOT_EFLASH;
     }
     if (bootutil_buffer_is_erased(fap, flag, sizeof *flag)) {
+        BOOT_LOG_INF("buffer_is_erased fa_id=%d off=0x%lx (0x%lx) flag=UNSET ERASED", fap->fa_id, off, fap->fa_off+off);
         *flag = BOOT_FLAG_UNSET;
     } else {
+        BOOT_LOG_INF("buffer_is_erased fa_id=%d off=0x%lx (0x%lx) flag=0x%x NOT ERASED", fap->fa_id, off, fap->fa_off+off, *flag);
         *flag = boot_flag_decode(*flag);
     }
 
@@ -254,9 +262,11 @@ boot_read_swap_state(const struct flash_area *fap,
         return BOOT_EFLASH;
     }
     if (bootutil_buffer_is_erased(fap, magic, BOOT_MAGIC_SZ)) {
+        BOOT_LOG_INF("buffer_is_erased boot_read_swap_state fa_id=%d off=0x%lx (0x%lx) magic=UNSET ERASED", fap->fa_id, off, fap->fa_off+off);
         state->magic = BOOT_MAGIC_UNSET;
     } else {
         state->magic = boot_magic_decode(magic);
+        BOOT_LOG_INF("buffer_is_erased boot_read_swap_state fa_id=%d off=0x%lx (0x%lx) decode_magic=0x%x NOT ERASED", fap->fa_id, off, fap->fa_off+off, state->magic);
     }
 
     off = boot_swap_info_off(fap);
@@ -268,6 +278,21 @@ boot_read_swap_state(const struct flash_area *fap,
     /* Extract the swap type and image number */
     state->swap_type = BOOT_GET_SWAP_TYPE(swap_info);
     state->image_num = BOOT_GET_IMAGE_NUM(swap_info);
+
+    if (bootutil_buffer_is_erased(fap, &swap_info, sizeof swap_info)) {
+        BOOT_LOG_INF("buffer_is_erased boot_read_swap_state fa_id=%d off=0x%lx (0x%lx) swap_info=UNSET ERASED", fap->fa_id, off, fap->fa_off+off);
+    } else {
+        BOOT_LOG_INF("buffer_is_erased boot_read_swap_state fa_id=%d off=0x%lx (0x%lx) swap_info=0x%x NOT ERASED \
+            \nswap_type=%s image_num=%d",
+            fap->fa_id, off, fap->fa_off+off, swap_info,
+            state->swap_type == BOOT_SWAP_TYPE_NONE ? "none" :
+            state->swap_type == BOOT_SWAP_TYPE_TEST ? "test" :
+            state->swap_type == BOOT_SWAP_TYPE_PERM ? "perm" :
+            state->swap_type == BOOT_SWAP_TYPE_REVERT ? "revert->none" :
+            state->swap_type == BOOT_SWAP_TYPE_FAIL ? "fail->none" :
+            "ERROR->none",
+            state->image_num);
+    }
 
     if (bootutil_buffer_is_erased(fap, &swap_info, sizeof swap_info) ||
             state->swap_type > BOOT_SWAP_TYPE_REVERT) {
@@ -324,7 +349,7 @@ boot_write_magic(const struct flash_area *fap)
     memset(&magic[0], erased_val, sizeof(magic));
     memcpy(&magic[BOOT_MAGIC_ALIGN_SIZE - BOOT_MAGIC_SZ], BOOT_IMG_MAGIC, BOOT_MAGIC_SZ);
 
-    BOOT_LOG_DBG("boot_write_magic: fa_id=%d off=0x%lx (0x%lx)",
+    BOOT_LOG_INF("boot_write_magic: fa_id=%d off=0x%lx (0x%lx)",
                  flash_area_get_id(fap), (unsigned long)off,
                  (unsigned long)(flash_area_get_off(fap) + off));
 
@@ -355,8 +380,8 @@ boot_write_trailer(const struct flash_area *fap, uint32_t off,
     uint32_t align;
     int rc;
 
-    BOOT_LOG_DBG("boot_write_trailer: for %p at %d, size = %d",
-                 fap, off, inlen);
+    BOOT_LOG_INF("boot_write_trailer: for %d at 0x%x (0x%x), size = %d",
+                 fap->fa_id, off, fap->fa_off + off, inlen);
 
     align = flash_area_align(fap);
     align = ALIGN_UP(inlen, align);
@@ -396,7 +421,7 @@ boot_write_image_ok(const struct flash_area *fap)
     uint32_t off;
 
     off = boot_image_ok_off(fap);
-    BOOT_LOG_DBG("writing image_ok; fa_id=%d off=0x%lx (0x%lx)",
+    BOOT_LOG_INF("writing image_ok; fa_id=%d off=0x%lx (0x%lx)",
                  flash_area_get_id(fap), (unsigned long)off,
                  (unsigned long)(flash_area_get_off(fap) + off));
     return boot_write_trailer_flag(fap, off, BOOT_FLAG_SET);
@@ -422,7 +447,7 @@ boot_write_swap_info(const struct flash_area *fap, uint8_t swap_type,
 
     BOOT_SET_SWAP_INFO(swap_info, image_num, swap_type);
     off = boot_swap_info_off(fap);
-    BOOT_LOG_DBG("writing swap_info; fa_id=%d off=0x%lx (0x%lx), swap_type=0x%x"
+    BOOT_LOG_INF("writing swap_info; fa_id=%d off=0x%lx (0x%lx), swap_type=0x%x"
                  " image_num=0x%x",
                  flash_area_get_id(fap), (unsigned long)off,
                  (unsigned long)(flash_area_get_off(fap) + off),
@@ -506,7 +531,7 @@ boot_write_copy_done(const struct flash_area *fap)
     uint32_t off;
 
     off = boot_copy_done_off(fap);
-    BOOT_LOG_DBG("writing copy_done; fa_id=%d off=0x%lx (0x%lx)",
+    BOOT_LOG_INF("writing copy_done; fa_id=%d off=0x%lx (0x%lx)",
                  flash_area_get_id(fap), (unsigned long)off,
                  (unsigned long)(flash_area_get_off(fap) + off));
     return boot_write_trailer_flag(fap, off, BOOT_FLAG_SET);
@@ -579,6 +604,14 @@ boot_set_next(const struct flash_area *fa, bool active, bool confirm)
                     swap_type = BOOT_SWAP_TYPE_TEST;
                 }
                 rc = boot_write_swap_info(fa, swap_type, flash_area_to_image(fa));
+
+                uint32_t off = boot_swap_info_off(fa);
+                uint8_t swap_info;
+                rc = flash_area_read(fa, off, &swap_info, sizeof swap_info);
+                BOOT_LOG_INF("boot_set_next reading swap_info; fa_id=%d off=0x%lx (0x%lx), swap_info=0x%x",
+                 flash_area_get_id(fa), (unsigned long)off,
+                 (unsigned long)(flash_area_get_off(fa) + off),
+                 swap_info);
             }
         }
         break;
@@ -607,7 +640,7 @@ boot_set_next(const struct flash_area *fa, bool active, bool confirm)
     struct boot_swap_state slot_state;
     int rc;
 
-    BOOT_LOG_DBG("boot_set_next: fa %p active == %d, confirm == %d",
+    BOOT_LOG_INF("boot_set_next: fa %p active == %d, confirm == %d",
                  fa, (int)active, (int)confirm);
 
     if (active) {
@@ -620,7 +653,7 @@ boot_set_next(const struct flash_area *fa, bool active, bool confirm)
 
     rc = boot_read_swap_state(fa, &slot_state);
     if (rc != 0) {
-        BOOT_LOG_DBG("boot_set_next: error %d reading state", rc);
+        BOOT_LOG_INF("boot_set_next: error %d reading state", rc);
         return rc;
     }
 
@@ -748,7 +781,7 @@ boot_set_confirmed_multi(int image_index)
 
     rc = flash_area_open(FLASH_AREA_IMAGE_PRIMARY(image_index), &fap);
     if (rc != 0) {
-        BOOT_LOG_DBG("boot_set_confirmed_multi: error %d opening image %d",
+        BOOT_LOG_INF("boot_set_confirmed_multi: error %d opening image %d",
                      rc, image_index);
         return BOOT_EFLASH;
     }
@@ -780,7 +813,7 @@ boot_image_load_header(const struct flash_area *fa_p,
     uint32_t size = 0;
     int rc = flash_area_read(fa_p, 0, hdr, sizeof *hdr);
 
-    BOOT_LOG_DBG("boot_image_load_header: from %p, result %d", fa_p, rc);
+    BOOT_LOG_INF("boot_image_load_header: from %d, result %d", fa_p->fa_id, rc);
 
     if (rc != 0) {
         BOOT_LOG_ERR("Failed reading image header");
