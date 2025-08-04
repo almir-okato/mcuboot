@@ -168,6 +168,75 @@ static void flush_cache(size_t start_addr, size_t length)
 }
 #endif
 
+int flash_area_read_unencrypted(const struct flash_area *fa, uint32_t off, void *dst,
+                                uint32_t len)
+{
+    if (fa->fa_device_id != FLASH_DEVICE_INTERNAL_FLASH) {
+        return -1;
+    }
+
+    const uint32_t end_offset = off + len;
+    if (end_offset > fa->fa_size) {
+        BOOT_LOG_ERR("%s: Out of Bounds (0x%x vs 0x%x)", __func__, end_offset, fa->fa_size);
+        return -1;
+    }
+
+    const uint32_t addr = fa->fa_off + off;
+    const void *dest = dst;
+    size_t size = len;
+
+    if (IS_ALIGNED(addr, 4) && IS_ALIGNED((uintptr_t)dest, 4) && IS_ALIGNED(size, 4)) {
+        /* A single read operation is enough when when all parameters are aligned */
+
+        return !(bootloader_flash_read(addr, dest, size, false) == ESP_OK);
+    }
+
+    const uint32_t aligned_addr = ALIGN_DOWN(addr, 4);
+    const uint32_t addr_offset = ALIGN_OFFSET(addr, 4);
+    uint32_t bytes_remaining = size;
+    uint8_t read_data[FLASH_BUFFER_SIZE] = {0};
+
+    /* Align the read address to 4-byte boundary and ensure read size is a multiple of 4 bytes */
+
+    uint32_t bytes = MIN(bytes_remaining + addr_offset, sizeof(read_data));
+    if (bootloader_flash_read(aligned_addr, read_data, ALIGN_UP(bytes, 4), false) != ESP_OK) {
+        return -1;
+    }
+
+    /* Skip non-useful data which may have been read for adjusting the alignment */
+
+    uint32_t bytes_read = bytes - addr_offset;
+    memcpy(dest, &read_data[addr_offset], bytes_read);
+
+    bytes_remaining -= bytes_read;
+
+    /* Read remaining data from Flash in case requested size is greater than buffer size */
+
+    uint32_t offset = bytes;
+
+    while (bytes_remaining != 0) {
+        bytes = MIN(bytes_remaining, sizeof(read_data));
+        if (bootloader_flash_read(aligned_addr + offset, read_data, ALIGN_UP(bytes, 4), false) != ESP_OK) {
+            return -1;
+        }
+
+        memcpy(&((uint8_t *)dest)[bytes_read], read_data, bytes);
+
+        offset += bytes;
+        bytes_read += bytes;
+        bytes_remaining -= bytes;
+    }
+
+    // bool success = aligned_flash_read(fa->fa_off + off, dst, len, false);
+    // if (!success) {
+    //     BOOT_LOG_ERR("%s: Flash read failed", __func__);
+
+    //     return -1;
+    // }
+
+    return 0;
+}
+
 static bool aligned_flash_read(uintptr_t addr, void *dest, size_t size)
 {
     if (IS_ALIGNED(addr, 4) && IS_ALIGNED((uintptr_t)dest, 4) && IS_ALIGNED(size, 4)) {
