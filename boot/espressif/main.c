@@ -460,6 +460,702 @@ write_read_trailer_test() {
     return rc;
 }
 
+
+#define FLASH_SECTOR_SIZE 0x1000
+int flash_area_read_unencrypted(const struct flash_area *fa, uint32_t off, void *dst,
+                                uint32_t len);
+
+int
+erased_val_test(struct flash_area *fap)
+{
+    int rc;
+
+    uint32_t off = 0x12000;
+    BOOT_LOG_INF("----------ERASE-VAL-TEST----------");
+
+    rc = flash_area_erase(fap, off, FLASH_SECTOR_SIZE);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+
+    uint8_t read_buf[FLASH_SECTOR_SIZE];
+
+    BOOT_LOG_INF("READING SECTOR SIZE bytes");
+
+    rc = flash_area_read(fap,off, read_buf, FLASH_SECTOR_SIZE);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    for (uint32_t i=0; i<FLASH_SECTOR_SIZE; i=i+4) {
+        if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+            BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+        }
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+    }
+
+    BOOT_LOG_INF("READING SECTOR SIZE bytes - UNENCRYPTED");
+
+    rc = flash_area_read_unencrypted(fap, off, read_buf, FLASH_SECTOR_SIZE);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    for (uint32_t i=0; i<FLASH_SECTOR_SIZE; i=i+4) {
+        if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+            BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+        }
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+    }
+
+    BOOT_LOG_INF("READING EACH 32 bytes");
+
+    uint8_t read_buf2[32];
+    for (uint32_t i=0; i<FLASH_SECTOR_SIZE; i=i+32) {
+        rc = flash_area_read(fap,off + i, read_buf2, 32);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+
+        BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+        for (uint32_t j=0; j<32; j=j+4) {
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf2[j], read_buf2[j+1], read_buf2[j+2], read_buf2[j+3]);
+        }
+
+    }
+
+    BOOT_LOG_INF("----------ERASE-VAL-TEST----------");
+
+    return 0;
+}
+
+#define FLASH_SECTOR_SIZE_N (FLASH_SECTOR_SIZE * 3)
+
+int
+erased_val_2_test(struct flash_area *fap)
+{
+    int rc;
+
+    uint32_t off = 0x13000;
+    uint8_t read_buf[FLASH_SECTOR_SIZE_N];
+
+    BOOT_LOG_INF("----------ERASE-VAL-TEST-2----------");
+
+    rc = flash_area_erase(fap, off, FLASH_SECTOR_SIZE_N);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+
+    BOOT_LOG_INF("READING N SECTOR SIZE bytes");
+
+    rc = flash_area_read(fap,off, read_buf, FLASH_SECTOR_SIZE_N);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    for (uint32_t i=0; i<FLASH_SECTOR_SIZE_N; i=i+4) {
+        if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+            BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+        }
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+    }
+
+    BOOT_LOG_INF("READING N SECTOR SIZE bytes - UNENCRYPTED");
+
+    rc = flash_area_read_unencrypted(fap, off, read_buf, FLASH_SECTOR_SIZE_N);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    for (uint32_t i=0; i<FLASH_SECTOR_SIZE_N; i=i+4) {
+        if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+            BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+        }
+        BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+            read_buf[i], read_buf[i+1], read_buf[i+2], read_buf[i+3]);
+    }
+
+    BOOT_LOG_INF("READING EACH 32 bytes");
+
+    uint8_t read_buf2[32];
+    for (uint32_t i=0; i<FLASH_SECTOR_SIZE_N; i=i+32) {
+        rc = flash_area_read(fap,off + i, read_buf2, 32);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+
+        BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + i));
+        for (uint32_t j=0; j<32; j=j+4) {
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf2[j], read_buf2[j+1], read_buf2[j+2], read_buf2[j+3]);
+        }
+
+    }
+
+    BOOT_LOG_INF("----------ERASE-VAL-TEST-2----------");
+
+    return 0;
+}
+
+static uint8_t reset_buf_pattern[FLASH_SECTOR_SIZE_N] = {0};
+static uint8_t read_buf_sec[FLASH_SECTOR_SIZE] = {0};
+
+int
+erase_tests_reset_area(struct flash_area *fap, uint32_t off, size_t len)
+{
+    int rc;
+    BOOT_LOG_INF("--RESETING-AREA--");
+    rc = flash_area_erase(fap, off, len);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+
+    if (reset_buf_pattern[0] == 0) {
+        memset(&reset_buf_pattern[0], 0xA5, FLASH_SECTOR_SIZE_N);
+    }
+
+    memset(&read_buf_sec[0], 0, FLASH_SECTOR_SIZE);
+
+    rc = flash_area_write(fap, off, &reset_buf_pattern[0], len);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    BOOT_LOG_INF("--RESETING-AREA--");
+    return 0;
+}
+
+int
+erase_tests_read_area(struct flash_area *fap, uint32_t off, size_t len)
+{
+    int rc;
+
+    BOOT_LOG_INF(">>READING SECTOR SIZE bytes>>");
+    for (size_t read_len = 0; read_len < len; read_len += FLASH_SECTOR_SIZE) {
+        rc = flash_area_read(fap,off + read_len, read_buf_sec, FLASH_SECTOR_SIZE);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        for (uint32_t i=0; i<FLASH_SECTOR_SIZE; i=i+4) {
+            if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+                BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + read_len + i));
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf_sec[i], read_buf_sec[i+1], read_buf_sec[i+2], read_buf_sec[i+3]);
+        }
+    }
+    BOOT_LOG_INF("<<READING SECTOR SIZE bytes<<");
+
+    BOOT_LOG_INF(">>READING SECTOR SIZE bytes - UNENCRYPTED>>");
+    for (size_t read_len = 0; read_len < len; read_len += FLASH_SECTOR_SIZE) {
+        rc = flash_area_read_unencrypted(fap, off + read_len, read_buf_sec, FLASH_SECTOR_SIZE);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        for (uint32_t i=0; i<FLASH_SECTOR_SIZE; i=i+4) {
+            if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+                BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + read_len + i));
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf_sec[i], read_buf_sec[i+1], read_buf_sec[i+2], read_buf_sec[i+3]);
+        }
+    }
+    BOOT_LOG_INF("<<READING SECTOR SIZE bytes - UNENCRYPTED<<");
+
+    return 0;
+}
+
+int
+erase_tests(struct flash_area *fap)
+{
+    int rc;
+
+    uint32_t off = 0x15000;
+    uint32_t area_size;
+    uint32_t area_start;
+    uint32_t area_end;
+    uint32_t head_size;
+    uint32_t tail_off;
+    uint32_t tail_size;
+    uint32_t erase_off;
+    size_t size;
+    BOOT_LOG_INF("----------ERASE-TESTS----------");
+
+
+    // BOOT_LOG_INF("--CASE-ALL--");
+    // area_size = FLASH_SECTOR_SIZE_N;
+    // area_start = flash_area_get_off(fap) + off;
+    // area_end = area_start + area_size;
+    // head_size = 0;
+    // tail_size = 0;
+    // tail_off = area_size - tail_size;
+    // size = area_size - tail_size - head_size;
+    // erase_off = head_size;
+    // BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+    //             area_start, head_size > 0 ? '|' : ' ',
+    //             area_start + erase_off, area_start + erase_off + size,
+    //             tail_size > 0 ? '|' : ' ', area_end, size);
+
+    // rc = erase_tests_reset_area(fap, off, area_size);
+    // if (rc != 0) {
+    //     return BOOT_EFLASH;
+    // }
+    // rc = flash_area_erase(fap, off + erase_off, size);
+    // if (rc != 0) {
+    //     return BOOT_EFLASH;
+    // }
+    // rc = erase_tests_read_area(fap, off, area_size);
+    // if (rc != 0) {
+    //     return BOOT_EFLASH;
+    // }
+    // off += area_size;
+
+    BOOT_LOG_INF("--CASE1-PRESERVE-TAIL--");
+    area_size = FLASH_SECTOR_SIZE;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    head_size = 0;
+    tail_size = 0xC00;
+    tail_off = area_size - tail_size;
+    size = area_size - tail_size - head_size;
+    erase_off = head_size;
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + erase_off, area_start + erase_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+    rc = erase_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_erase(fap, off + erase_off, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = erase_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += area_size;
+
+    BOOT_LOG_INF("--CASE2-PRESERVE-HEAD--");
+    area_size = FLASH_SECTOR_SIZE;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    head_size = 0x400;
+    tail_size = 0;
+    tail_off = area_size - tail_size;
+    size = area_size - tail_size - head_size;
+    erase_off = head_size;
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + erase_off, area_start + erase_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+    rc = erase_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_erase(fap, off + erase_off, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = erase_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += area_size;
+
+    BOOT_LOG_INF("--CASE3-PRESERVE-HEAD-PRESERVE-TAIL--");
+    area_size = FLASH_SECTOR_SIZE;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    head_size = 0xA00;
+    tail_size = 0x400;
+    tail_off = area_size - tail_size;
+    size = area_size - tail_size - head_size;
+    erase_off = head_size;
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + erase_off, area_start + erase_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+    rc = erase_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_erase(fap, off + erase_off, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = erase_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += area_size;
+
+    BOOT_LOG_INF("--CASE4-WHOLESEC-PRESERVE-TAIL--");
+    area_size = FLASH_SECTOR_SIZE_N;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    head_size = 0;
+    tail_size = 0xC00;
+    tail_off = area_size - tail_size;
+    size = area_size - tail_size - head_size;
+    erase_off = head_size;
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + erase_off, area_start + erase_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+    rc = erase_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_erase(fap, off + erase_off, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = erase_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += area_size;
+
+    BOOT_LOG_INF("--CASE5-PRESERVE-HEAD-WHOLESEC--");
+    area_size = FLASH_SECTOR_SIZE_N;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    head_size = 0x400;
+    tail_size = 0;
+    tail_off = area_size - tail_size;
+    size = area_size - tail_size - head_size;
+    erase_off = head_size;
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + erase_off, area_start + erase_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+    rc = erase_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_erase(fap, off + erase_off, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = erase_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += area_size;
+
+    BOOT_LOG_INF("--CASE6-PRESERVE-HEAD-WHOLESEC-PRESERVE-TAIL--");
+    area_size = FLASH_SECTOR_SIZE_N;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    head_size = 0x400;
+    tail_size = 0xC00;
+    tail_off = area_size - tail_size;
+    size = area_size - tail_size - head_size;
+    erase_off = head_size;
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + erase_off, area_start + erase_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+    rc = erase_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_erase(fap, off + erase_off, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = erase_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += area_size;
+
+
+    BOOT_LOG_INF("----------ERASE-TESTS----------");
+
+    return 0;
+}
+
+#define UNALIGN_OFFSET 16
+#define FLASH_ALIGNMENT 32
+#define WRITE_TEST_AREA_N FLASH_ALIGNMENT * 3
+static uint8_t write_buf_pattern[WRITE_TEST_AREA_N] = {0};
+
+int
+write_tests_reset_area(struct flash_area *fap, uint32_t off, size_t len)
+{
+    int rc;
+    BOOT_LOG_INF("--RESETING-AREA--");
+    rc = flash_area_erase(fap, off, len);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+
+    if (write_buf_pattern[0] == 0) {
+        memset(&write_buf_pattern[0], 0x43, WRITE_TEST_AREA_N);
+    }
+
+    memset(&read_buf_sec[0], 0, FLASH_SECTOR_SIZE);
+
+    // rc = flash_area_write(fap, off, &reset_buf_pattern[0], len);
+    // if (rc != 0) {
+    //     return BOOT_EFLASH;
+    // }
+    BOOT_LOG_INF("--RESETING-AREA--");
+    return 0;
+}
+
+int
+write_tests_read_area(struct flash_area *fap, uint32_t off, size_t len)
+{
+    int rc;
+
+    BOOT_LOG_INF(">>READING ALIGNMENT SIZE bytes>>");
+    for (size_t read_len = 0; read_len < len; read_len += FLASH_ALIGNMENT) {
+        rc = flash_area_read(fap,off + read_len, read_buf_sec, FLASH_ALIGNMENT);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        for (uint32_t i=0; i<FLASH_ALIGNMENT; i=i+4) {
+            if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+                BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + read_len + i));
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf_sec[i], read_buf_sec[i+1], read_buf_sec[i+2], read_buf_sec[i+3]);
+        }
+    }
+    BOOT_LOG_INF("<<READING ALIGNMENT SIZE bytes<<");
+
+    BOOT_LOG_INF(">>READING ALIGNMENT SIZE bytes - UNENCRYPTED>>");
+    for (size_t read_len = 0; read_len < len; read_len += FLASH_ALIGNMENT) {
+        rc = flash_area_read_unencrypted(fap, off + read_len, read_buf_sec, FLASH_ALIGNMENT);
+        if (rc != 0) {
+            return BOOT_EFLASH;
+        }
+        for (uint32_t i=0; i<FLASH_ALIGNMENT; i=i+4) {
+            if (i % BOOT_MAGIC_ALIGN_SIZE == 0) {
+                BOOT_LOG_INF("addr: 0x%08lx", (unsigned long)(flash_area_get_off(fap) + off + read_len + i));
+            }
+            BOOT_LOG_INF("0x%x 0x%x 0x%x 0x%x",
+                read_buf_sec[i], read_buf_sec[i+1], read_buf_sec[i+2], read_buf_sec[i+3]);
+        }
+    }
+    BOOT_LOG_INF("<<READING ALIGNMENT SIZE bytes - UNENCRYPTED<<");
+
+    return 0;
+}
+
+int
+write_tests(struct flash_area *fap)
+{
+    int rc;
+
+    uint32_t off = 0x25000;
+    uint32_t area_size;
+    uint32_t area_start;
+    uint32_t area_end;
+    uint32_t head_size;
+    uint32_t tail_off;
+    uint32_t tail_size;
+    uint32_t write_off;
+    size_t size;
+    BOOT_LOG_INF("----------WRITE-TESTS----------");
+
+    BOOT_LOG_INF("--CASE-ALL--");
+    area_size = WRITE_TEST_AREA_N;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    write_off = 0;
+    size = WRITE_TEST_AREA_N;
+    head_size = write_off;
+    tail_size = area_end - (area_start + write_off + size);
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + write_off, area_start + write_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+
+    rc = write_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_write(fap, off + write_off, write_buf_pattern, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = write_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += FLASH_SECTOR_SIZE;
+
+    BOOT_LOG_INF("--CASE1-WRITE-HEAD--");
+    area_size = FLASH_ALIGNMENT;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    write_off = 0;
+    size = 0x10;
+    head_size = write_off;
+    tail_size = area_end - (area_start + write_off + size);
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + write_off, area_start + write_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+
+    rc = write_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_write(fap, off + write_off, write_buf_pattern, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = write_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += FLASH_SECTOR_SIZE;
+
+    BOOT_LOG_INF("--CASE2-WRITE-TAIL--");
+    area_size = FLASH_ALIGNMENT;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    write_off = 0x14;
+    size = 0x0C;
+    head_size = write_off;
+    tail_size = area_end - (area_start + write_off + size);
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + write_off, area_start + write_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+
+    rc = write_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_write(fap, off + write_off, write_buf_pattern, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = write_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += FLASH_SECTOR_SIZE;
+
+    BOOT_LOG_INF("--CASE3-WRITE-MIDDLE--");
+    area_size = FLASH_ALIGNMENT;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    write_off = 0x0C;
+    size = 0x0C;
+    head_size = write_off;
+    tail_size = area_end - (area_start + write_off + size);
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + write_off, area_start + write_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+
+    rc = write_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_write(fap, off + write_off, write_buf_pattern, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = write_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += FLASH_SECTOR_SIZE;
+
+    BOOT_LOG_INF("--CASE4-WRITE-BLOCK-WRITE-HEAD--");
+    area_size = WRITE_TEST_AREA_N;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    write_off = 0;
+    size = 0x28;
+    head_size = write_off;
+    tail_size = area_end - (area_start + write_off + size);
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + write_off, area_start + write_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+
+    rc = write_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_write(fap, off + write_off, write_buf_pattern, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = write_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += FLASH_SECTOR_SIZE;
+
+    BOOT_LOG_INF("--CASE5-WRITE-TAIL-WRITE-BLOCK--");
+    area_size = WRITE_TEST_AREA_N;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    write_off = 0x14;
+    size = 0x2C;
+    head_size = write_off;
+    tail_size = area_end - (area_start + write_off + size);
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + write_off, area_start + write_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+
+    rc = write_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_write(fap, off + write_off, write_buf_pattern, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = write_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += FLASH_SECTOR_SIZE;
+
+    BOOT_LOG_INF("--CASE6-WRITE-TAIL-WRITE-BLOCK-WRITE-HEAD--");
+    area_size = WRITE_TEST_AREA_N;
+    area_start = flash_area_get_off(fap) + off;
+    area_end = area_start + area_size;
+    write_off = 0x14;
+    size = 0x34;
+    head_size = write_off;
+    tail_size = area_end - (area_start + write_off + size);
+    BOOT_LOG_INF("-- area_start=0x%08x %c off=0x%08x off+size=0x%08x %c area_end=0x%08x size=0x%08x--",
+                area_start, head_size > 0 ? '|' : ' ',
+                area_start + write_off, area_start + write_off + size,
+                tail_size > 0 ? '|' : ' ', area_end, size);
+
+    rc = write_tests_reset_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = flash_area_write(fap, off + write_off, write_buf_pattern, size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    rc = write_tests_read_area(fap, off, area_size);
+    if (rc != 0) {
+        return BOOT_EFLASH;
+    }
+    off += FLASH_SECTOR_SIZE;
+
+    BOOT_LOG_INF("----------WRITE-TESTS----------");
+
+    return 0;
+}
+
 int main()
 {
     if (bootloader_init() != ESP_OK) {
@@ -534,7 +1230,6 @@ int main()
     }
 #endif
 
-
     uint32_t swap_status_off;
     uint32_t swap_info_off;
     const struct flash_area *fap;
@@ -546,33 +1241,53 @@ int main()
 
         BOOT_LOG_INF("\nTESTS DEBUG fa_id=%d (0x%lx)", fa_id, fap->fa_off);
 
-        rc = write_test(fap);
-        if (rc != 0) {
-            BOOT_LOG_INF("ERROR!");
-        }
-        rc = read_test(fap);
-        if (rc != 0) {
-            BOOT_LOG_INF("ERROR!");
-        }
-        rc = write_noerase_test(fap);
-        if (rc != 0) {
-            BOOT_LOG_INF("ERROR!");
-        }
-        rc = read_noerase_test(fap);
-        if (rc != 0) {
-            BOOT_LOG_INF("ERROR!");
-        }
-        rc = write_unaligned_test(fap);
-        if (rc != 0) {
-            BOOT_LOG_INF("ERROR!");
-        }
-        rc = read_unaligned_test(fap);
-        if (rc != 0) {
-            BOOT_LOG_INF("ERROR!");
-        }
+        // rc = erased_val_test(fap);
+        // if (rc != 0) {
+        //     BOOT_LOG_INF("ERROR!");
+        // }
+        // rc = erased_val_2_test(fap);
+        // if (rc != 0) {
+        //     BOOT_LOG_INF("ERROR!");
+        // }
+
+        // rc = write_test(fap);
+        // if (rc != 0) {
+        //     BOOT_LOG_INF("ERROR!");
+        // }
+        // rc = read_test(fap);
+        // if (rc != 0) {
+        //     BOOT_LOG_INF("ERROR!");
+        // }
+        // rc = write_noerase_test(fap);
+        // if (rc != 0) {
+        //     BOOT_LOG_INF("ERROR!");
+        // }
+        // rc = read_noerase_test(fap);
+        // if (rc != 0) {
+        //     BOOT_LOG_INF("ERROR!");
+        // }
+        // rc = write_unaligned_test(fap);
+        // if (rc != 0) {
+        //     BOOT_LOG_INF("ERROR!");
+        // }
+        // rc = read_unaligned_test(fap);
+        // if (rc != 0) {
+        //     BOOT_LOG_INF("ERROR!");
+        // }
 
     }
-    write_read_trailer_test();
+    fa_id = flash_area_id_from_multi_image_slot(0, 0);
+    rc = flash_area_open(fa_id, &fap);
+    rc = erase_tests(fap);
+    if (rc != 0) {
+            BOOT_LOG_INF("ERROR!");
+    }
+    rc = write_tests(fap);
+    if (rc != 0) {
+            BOOT_LOG_INF("ERROR!");
+    }
+
+    // write_read_trailer_test();
     while(1);
 
 
