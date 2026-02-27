@@ -131,6 +131,7 @@ SECTIONS
   .dram0.data :
   {
     _data_start = ABSOLUTE(.);
+    *(.dram1 .dram1.*) /* catch stray DRAM_ATTR */
     *(.data)
     *(.data.*)
     *(.gnu.linkonce.d.*)

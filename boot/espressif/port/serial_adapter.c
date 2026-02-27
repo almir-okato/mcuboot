@@ -6,12 +6,11 @@
 
 #include <bootutil/bootutil_log.h>
 
-#include <esp_rom_uart.h>
+#include <esp_rom_serial_output.h>
 #include <esp_rom_gpio.h>
 #include <esp_rom_sys.h>
 #include <esp_rom_caps.h>
 #include <esp_log.h>
-#include <soc/uart_periph.h>
 #include <soc/gpio_struct.h>
 #include <soc/io_mux_reg.h>
 #include <soc/rtc.h>
@@ -21,9 +20,13 @@
 #include <hal/clk_gate_ll.h>
 #include <hal/clk_tree_ll.h>
 #include <hal/gpio_hal.h>
+#include <hal/uart_periph.h>
 #ifdef CONFIG_ESP_MCUBOOT_SERIAL_USB_SERIAL_JTAG
 #include <hal/usb_serial_jtag_ll.h>
 #endif
+
+#define UART_NUM_0 0
+#define UART_NUM_1 1
 
 #ifdef CONFIG_ESP_SERIAL_BOOT_GPIO_DETECT
 #define SERIAL_BOOT_GPIO_DETECT     CONFIG_ESP_SERIAL_BOOT_GPIO_DETECT
@@ -70,7 +73,7 @@
 #ifdef CONFIG_ESP_SERIAL_BOOT_UART_NUM
 #define SERIAL_BOOT_UART_NUM    CONFIG_ESP_SERIAL_BOOT_UART_NUM
 #else
-#define SERIAL_BOOT_UART_NUM    ESP_ROM_UART_1
+#define SERIAL_BOOT_UART_NUM    UART_NUM_1
 #endif
 
 #ifdef CONFIG_ESP_SERIAL_BOOT_GPIO_RX
@@ -121,7 +124,7 @@
 #define SERIAL_BOOT_BAUDRATE     115200
 #endif
 
-static uart_dev_t *serial_boot_uart_dev = (SERIAL_BOOT_UART_NUM == 0) ?
+static uart_dev_t *serial_boot_uart_dev = (SERIAL_BOOT_UART_NUM == UART_NUM_0) ?
                                           &UART0 :
                                           &UART1;
 
@@ -207,17 +210,19 @@ int boot_console_init(void)
     usb_serial_jtag_ll_txfifo_flush();
     esp_rom_uart_tx_wait_idle(0);
 #else
+    int __DECLARE_RCC_ATOMIC_ENV __attribute__ ((unused)); // To avoid build errors/warnings about __DECLARE_RCC_ATOMIC_ENV
+    
     /* Enable GPIO for UART RX */
     esp_rom_gpio_pad_select_gpio(SERIAL_BOOT_GPIO_RX);
     esp_rom_gpio_connect_in_signal(SERIAL_BOOT_GPIO_RX,
-                                   UART_PERIPH_SIGNAL(SERIAL_BOOT_UART_NUM, SOC_UART_RX_PIN_IDX),
+                                   UART_PERIPH_SIGNAL(SERIAL_BOOT_UART_NUM, SOC_UART_PERIPH_SIGNAL_RX),
                                    0);
     gpio_ll_input_enable(&GPIO, SERIAL_BOOT_GPIO_RX);
 
     /* Enable GPIO for UART TX */
     esp_rom_gpio_pad_select_gpio(SERIAL_BOOT_GPIO_TX);
     esp_rom_gpio_connect_out_signal(SERIAL_BOOT_GPIO_TX,
-                                    UART_PERIPH_SIGNAL(SERIAL_BOOT_UART_NUM, SOC_UART_TX_PIN_IDX),
+                                    UART_PERIPH_SIGNAL(SERIAL_BOOT_UART_NUM, SOC_UART_PERIPH_SIGNAL_TX),
                                     0, 0);
     gpio_ll_output_enable(&GPIO, SERIAL_BOOT_GPIO_TX);
 
@@ -231,15 +236,17 @@ int boot_console_init(void)
 
     uart_sclk_t sclk = UART_SCLK_DEFAULT;
     uint32_t clock_hz = rtc_clk_apb_freq_get();
-    uart_ll_get_sclk(serial_boot_uart_dev, &sclk);
+    uart_ll_get_sclk(serial_boot_uart_dev, (soc_module_clk_t *)&sclk);
 #if ESP_ROM_UART_CLK_IS_XTAL
     if (sclk == UART_SCLK_XTAL) {
         clock_hz = (uint32_t)rtc_clk_xtal_freq_get() * MHZ;
     }
 #endif
+    uart_ll_reset_register(SERIAL_BOOT_UART_NUM);
+    uart_ll_enable_bus_clock(SERIAL_BOOT_UART_NUM, true);
+    uart_ll_sclk_enable(serial_boot_uart_dev);
+    
     uart_ll_set_baudrate(serial_boot_uart_dev, SERIAL_BOOT_BAUDRATE, clock_hz);
-
-    periph_ll_enable_clk_clear_rst(PERIPH_UART0_MODULE + SERIAL_BOOT_UART_NUM);
 
     uart_ll_txfifo_rst(serial_boot_uart_dev);
     uart_ll_rxfifo_rst(serial_boot_uart_dev);

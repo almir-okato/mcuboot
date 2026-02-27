@@ -17,7 +17,7 @@ set(MCUBOOT_ROOT_DIR ${CMAKE_CURRENT_LIST_DIR}/../..)
 set(ESPRESSIF_PORT_DIR ${MCUBOOT_ROOT_DIR}/boot/espressif)
 set(APP_NAME mcuboot_${MCUBOOT_TARGET})
 set(APP_EXECUTABLE ${APP_NAME}.elf)
-set(EXPECTED_IDF_HAL_VERSION "5.1.6")
+set(EXPECTED_IDF_HAL_VERSION "6.0.0")
 
 project(mcuboot_${MCUBOOT_TARGET})
 
@@ -34,17 +34,21 @@ if("${MCUBOOT_TARGET}" STREQUAL "esp32" OR
   "${MCUBOOT_TARGET}" STREQUAL "esp32s2" OR
   "${MCUBOOT_TARGET}" STREQUAL "esp32s3")
   set(MCUBOOT_ARCH "xtensa")
-elseif("${MCUBOOT_TARGET}" STREQUAL "esp32c3" OR
+elseif("${MCUBOOT_TARGET}" STREQUAL "esp32c2" OR
+  "${MCUBOOT_TARGET}" STREQUAL "esp32c3" OR
   "${MCUBOOT_TARGET}" STREQUAL "esp32c6" OR
-  "${MCUBOOT_TARGET}" STREQUAL "esp32c2" OR
   "${MCUBOOT_TARGET}" STREQUAL "esp32h2")
   set(MCUBOOT_ARCH "riscv")
+endif()
+
+if("${MCUBOOT_ARCH}" STREQUAL "riscv")
+  add_definitions(-D__riscv)
 endif()
 
 # Set MCUboot Espressif Port configuration file
 if(NOT DEFINED MCUBOOT_CONFIG_FILE)
   set(MCUBOOT_CONFIG_FILE "${ESPRESSIF_PORT_DIR}/port/${MCUBOOT_TARGET}/bootloader.conf")
-  message("MCUBOOT_CONFIG_FILE: ${MCUBOOT_CONFIG_FILE}")
+  message(STATUS "MCUBOOT_CONFIG_FILE: ${MCUBOOT_CONFIG_FILE}")
 endif()
 
 string(REPLACE " " ";" MCUBOOT_CONFIG_FILE_LIST "${MCUBOOT_CONFIG_FILE}")
@@ -58,7 +62,7 @@ endforeach()
 # Fetch and set toolchain
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   if(DEFINED TOOLCHAIN_BIN_DIR)
-    message("CMAKE_TOOLCHAIN_FILE not defined, searching for toolchain compiler in TOOLCHAIN_BIN_DIR: ${TOOLCHAIN_BIN_DIR}")
+    message(STATUS "CMAKE_TOOLCHAIN_FILE not defined, searching for toolchain compiler in TOOLCHAIN_BIN_DIR: ${TOOLCHAIN_BIN_DIR}")
     set(CMAKE_SYSTEM_NAME Generic)
 
     file(GLOB C_COMPILER_BIN "${TOOLCHAIN_BIN_DIR}/*${MCUBOOT_ARCH}*elf-gcc")
@@ -67,18 +71,18 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
     endif()
     set(CMAKE_C_COMPILER ${C_COMPILER_BIN})
     set(CMAKE_ASM_COMPILER ${C_COMPILER_BIN})
-    message("C compiler found: ${CMAKE_C_COMPILER}")
+    message(STATUS "C compiler found: ${CMAKE_C_COMPILER}")
 
     file(GLOB CXX_COMPILER_BIN "${TOOLCHAIN_BIN_DIR}/*${MCUBOOT_ARCH}*elf-g++")
     if(NOT CXX_COMPILER_BIN)
       message(FATAL_ERROR "No C++ compiler found. Please ensure that TOOLCHAIN_BIN_DIR directory contains a set of C++ compiling tools compatible with the target")
     endif()
     set(CMAKE_CXX_COMPILER ${CXX_COMPILER_BIN})
-    message("CXX compiler found: ${CMAKE_CXX_COMPILER}")
+    message(STATUS "CXX compiler found: ${CMAKE_CXX_COMPILER}")
   else()
     # Set toolchain file that expect the same toolchain as IDF sets on PATH
     set(CMAKE_TOOLCHAIN_FILE ${ESPRESSIF_PORT_DIR}/tools/toolchain-${MCUBOOT_TARGET}.cmake)
-    message("No user-defined toolchain, setting default toolchain file: ${CMAKE_TOOLCHAIN_FILE}")
+    message(STATUS "No user-defined toolchain, setting default toolchain file: ${CMAKE_TOOLCHAIN_FILE}")
   endif()
 
   # This flag is needed when redefining a different compiler toolchain at this point
@@ -86,7 +90,7 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE)
   # that may fail due to cross-compilation
   set(CMAKE_TRY_COMPILE_TARGET_TYPE "STATIC_LIBRARY")
 else()
-  message("CMAKE_TOOLCHAIN_FILE: ${CMAKE_TOOLCHAIN_FILE}")
+  message(STATUS "CMAKE_TOOLCHAIN_FILE: ${CMAKE_TOOLCHAIN_FILE}")
 endif()
 
 # Set the minimum revision for each supported chip
@@ -279,6 +283,8 @@ list(APPEND inc_directories
     )
 
 set(CFLAGS
+    "-specs=picolibc.specs"
+    "-nostdlib"
     "-Wno-frame-address"
     "-Wall"
     "-Wextra"
@@ -300,14 +306,14 @@ set(CFLAGS
     "-Wno-sign-compare"
     "-ggdb"
     "-Os"
-    "-D_GNU_SOURCE"
-    "-std=gnu17"
+    "-std=gnu23"
     "-Wno-old-style-declaration"
     "-Wno-implicit-int"
     "-Wno-declaration-after-statement"
     )
 
 set(LDFLAGS
+    "-specs=picolibc.specs"
     "-nostdlib"
     "-Wno-frame-address"
     "-Wl,--cref"
@@ -325,11 +331,23 @@ set(LDFLAGS
 if("${MCUBOOT_ARCH}" STREQUAL "xtensa")
   list(APPEND CFLAGS
       "-mlongcalls"
+      "-fno-builtin-memcpy"
+      "-fno-builtin-memset"
+      "-fno-builtin-bzero"
       )
   list(APPEND LDFLAGS
       "-mlongcalls"
+      "-fno-builtin-memcpy"
+      "-fno-builtin-memset"
+      "-fno-builtin-bzero"
       )
 endif()
+
+set_source_files_properties(
+    ${ESPRESSIF_PORT_DIR}/port/serial_adapter.c
+    PROPERTIES COMPILE_FLAGS
+    "-Wno-logical-op"
+    )
 
 set(LINKER_SCRIPT_INCLUDES ${ESPRESSIF_PORT_DIR}/port/include/${MCUBOOT_TARGET})
 
@@ -438,7 +456,7 @@ add_custom_command(
   COMMAND
   ${esptool_path}
   --chip ${MCUBOOT_TARGET} elf2image --min-rev ${ESP_MIN_REVISION}
-  --flash_mode ${ESP_FLASH_MODE} --flash_freq ${ESP_FLASH_FREQ} --flash_size ${CONFIG_ESP_FLASH_SIZE}
+  --flash-mode ${ESP_FLASH_MODE} --flash-freq ${ESP_FLASH_FREQ} --flash-size ${CONFIG_ESP_FLASH_SIZE}
   -o ${APP_NAME}.bin ${APP_NAME}.elf
   )
 
@@ -462,7 +480,7 @@ add_custom_command(
   ${esptool_path}
   -p ${FLASH_PORT} -b ${ESP_BAUD_RATE} --before default_reset --after no_reset
   --chip ${MCUBOOT_TARGET} write_flash
-  --flash_mode ${ESP_FLASH_MODE} --flash_size ${CONFIG_ESP_FLASH_SIZE}
-  --flash_freq ${ESP_FLASH_FREQ} ${CONFIG_ESP_BOOTLOADER_OFFSET}
+  --flash-mode ${ESP_FLASH_MODE} --flash-size ${CONFIG_ESP_FLASH_SIZE}
+  --flash-freq ${ESP_FLASH_FREQ} ${CONFIG_ESP_BOOTLOADER_OFFSET}
   ${APP_NAME}.bin
   )
