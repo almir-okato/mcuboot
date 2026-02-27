@@ -83,6 +83,7 @@ set(hal_srcs
     ${esp_hal_dir}/components/esp_hw_support/port/${MCUBOOT_TARGET}/rtc_time.c
     ${esp_hal_dir}/components/esp_hw_support/port/${MCUBOOT_TARGET}/rtc_clk.c
     ${esp_hal_dir}/components/esp_hw_support/port/${MCUBOOT_TARGET}/rtc_clk_init.c
+    ${esp_hal_dir}/components/esp_hw_support/port/${MCUBOOT_TARGET}/cpu_region_protect.c
     ${esp_hal_dir}/components/esp_rom/patches/esp_rom_uart.c
     ${esp_hal_dir}/components/esp_rom/patches/esp_rom_sys.c
     ${esp_hal_dir}/components/esp_rom/patches/esp_rom_spiflash.c
@@ -138,6 +139,7 @@ set(CFLAGS
     "-ffunction-sections"
     "-fdata-sections"
     "-fstrict-volatile-bitfields"
+    "-fdump-rtl-expand"
     "-Werror=all"
     "-Wno-error=unused-function"
     "-Wno-error=unused-but-set-variable"
