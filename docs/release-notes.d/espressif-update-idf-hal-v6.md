@@ -1,0 +1,1 @@
+- Update IDF HAL version used by Espressif Port to v6.0.0.
