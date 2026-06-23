@@ -40,6 +40,7 @@ elseif("${MCUBOOT_TARGET}" STREQUAL "esp32c2" OR
   "${MCUBOOT_TARGET}" STREQUAL "esp32c6" OR
   "${MCUBOOT_TARGET}" STREQUAL "esp32c61" OR
   "${MCUBOOT_TARGET}" STREQUAL "esp32p4" OR
+  "${MCUBOOT_TARGET}" STREQUAL "esp32h4" OR
   "${MCUBOOT_TARGET}" STREQUAL "esp32h2")
   set(MCUBOOT_ARCH "riscv")
 endif()
@@ -115,6 +116,8 @@ elseif("${MCUBOOT_TARGET}" STREQUAL "esp32c61")
   set(ESP_MIN_REVISION 0)
 elseif("${MCUBOOT_TARGET}" STREQUAL "esp32p4")
   set(ESP_MIN_REVISION 3)
+elseif("${MCUBOOT_TARGET}" STREQUAL "esp32h4")
+  set(ESP_MIN_REVISION 0)
 elseif("${MCUBOOT_TARGET}" STREQUAL "esp32h2")
   set(ESP_MIN_REVISION 0)
 else()
@@ -412,6 +415,13 @@ target_link_libraries(
 
 add_subdirectory(hal)
 
+if("${MCUBOOT_TARGET}" STREQUAL "esp32h4")
+  # ESP32-H4 ROM secure_boot.h uses ets_rsa_pubkey_t but omits rsa_pss.h (IDF-12262)
+  set(_esp32h4_rsa_pss_include -include ${ESPRESSIF_PORT_DIR}/hal/include/esp32h4/rom/rsa_pss.h)
+  target_compile_options(hal PRIVATE ${_esp32h4_rsa_pss_include})
+  target_compile_options(${APP_EXECUTABLE} PRIVATE ${_esp32h4_rsa_pss_include})
+endif()
+
 target_link_libraries(
   ${APP_EXECUTABLE}
   PUBLIC
@@ -444,6 +454,8 @@ if(NOT DEFINED ESP_FLASH_FREQ)
     set(ESP_FLASH_FREQ "40m")
   elseif("${MCUBOOT_TARGET}" STREQUAL "esp32p4")
     set(ESP_FLASH_FREQ "80m")
+  elseif("${MCUBOOT_TARGET}" STREQUAL "esp32h4")
+    set(ESP_FLASH_FREQ "48m")
   elseif("${MCUBOOT_TARGET}" STREQUAL "esp32c2")
     set(ESP_FLASH_FREQ "60m")
   elseif("${MCUBOOT_TARGET}" STREQUAL "esp32h2")
